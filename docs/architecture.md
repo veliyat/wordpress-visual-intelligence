@@ -2,7 +2,7 @@
 
 ## System Overview
 
-WordPress Visual Intelligence transforms rendered web pages into WordPress themes through visual analysis and design intent extraction.
+**wp-morph** transforms rendered web pages into WordPress themes through visual analysis and design intent extraction.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐

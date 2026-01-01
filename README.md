@@ -1,4 +1,4 @@
-# WordPress Visual Intelligence
+# wp-morph
 
 A CLI-first, open-source devtool that reconstructs visually accurate WordPress sites by reasoning about design intent, not HTML structure.
 
@@ -66,20 +66,20 @@ The IR (UI Blueprint) is the brain of the system. Core properties:
 
 ```bash
 # Generate WordPress theme from URL
-wp-visual generate https://example.com --output ./my-theme
+wp-morph generate https://example.com --output ./my-theme
 
 # With options
-wp-visual generate https://example.com \
+wp-morph generate https://example.com \
   --format bedrock \
   --max-iterations 5 \
   --threshold 0.92 \
   --provider claude
 
 # Validate generated theme against original
-wp-visual validate https://example.com ./my-theme
+wp-morph validate https://example.com ./my-theme
 
 # Export from saved IR
-wp-visual export ./blueprint.json --format vanilla
+wp-morph export ./blueprint.json --format vanilla
 ```
 
 ## Technology Stack

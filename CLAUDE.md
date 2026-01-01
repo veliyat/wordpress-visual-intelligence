@@ -4,7 +4,7 @@ This file provides context for Claude Code when working on this project.
 
 ## Project Identity
 
-**WordPress Visual Intelligence** is an open-source, CLI-first devtool that reconstructs visually accurate WordPress sites by reasoning about design intent through an Intermediate Representation (IR).
+**wp-morph** is an open-source, CLI-first devtool that reconstructs visually accurate WordPress sites by reasoning about design intent through an Intermediate Representation (IR).
 
 ### Non-Negotiables
 
