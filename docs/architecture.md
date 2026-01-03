@@ -26,6 +26,11 @@
 │  │  AI Vision  │  │  Token      │  │  IR Builder             │  │
 │  │  Analysis   │──│  Normalizer │──│  (UIBlueprint)          │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+│         ▲                                                        │
+│         │ Few-shot examples                                      │
+│  ┌──────┴──────────────────────────────────────────────────────┐ │
+│  │  MEMORY: Bundled Examples + Local Memory                    │ │
+│  └─────────────────────────────────────────────────────────────┘ │
 └─────────────────────┬───────────────────────────────────────────┘
                       │
                       ▼
@@ -44,10 +49,17 @@
 │  │  Screenshot │  │  Visual     │  │  Correction Signal      │  │
 │  │  Comparator │──│  Metrics    │──│  Generator              │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │
-                      │ (Feedback Loop)
-                      ▼
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+              ┌─────────────┴─────────────┐
+              │                           │
+              ▼ (Feedback Loop)           ▼ (On success)
+┌─────────────────────────┐    ┌─────────────────────────────────┐
+│      INTELLIGENCE       │    │    MEMORY: Store Example        │
+│   (Correction Passes)   │    │    (Local, opt-in contribute)   │
+└─────────────────────────┘    └─────────────────────────────────┘
+                                          │
+                                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                       OUTPUT                                     │
 │           WordPress Theme (vanilla or Bedrock)                   │
@@ -187,6 +199,130 @@ export type { BedrockConfig }
 ```
 
 **Dependencies**: `packages/core`, `packages/wp-generator`
+
+---
+
+### packages/memory
+
+Knowledge persistence and retrieval for cross-session learning.
+
+**Responsibilities**:
+- Store successful IR → WordPress mappings as examples
+- Index examples by layout intent, section types, patterns
+- Retrieve relevant examples during IR construction
+- Manage local user memory (private) and bundled examples
+
+**Architecture**:
+```
+┌─────────────────────────────────────────────────────┐
+│  Retriever                                          │
+│  ┌────────────────┐    ┌──────────────────────────┐ │
+│  │ Local Memory   │ →  │ Bundled Examples         │ │
+│  │ (~/.wp-morph/) │    │ (ships with package)     │ │
+│  │ [private]      │    │ [curated, versioned]     │ │
+│  └────────────────┘    └──────────────────────────┘ │
+└─────────────────────────────────────────────────────┘
+```
+
+**Storage Structure**:
+```
+packages/memory/
+├── data/
+│   └── examples/
+│       ├── hero-patterns.json
+│       ├── grid-layouts.json
+│       ├── navigation.json
+│       └── index.json           # Searchable index
+└── src/
+    ├── retriever.ts             # Example retrieval
+    ├── indexer.ts               # Example indexing
+    ├── local-store.ts           # User's local memory
+    └── types.ts
+
+~/.wp-morph/                      # User's local directory
+└── memory/
+    └── examples/                 # Successful conversions (private)
+```
+
+**Key Exports**:
+```typescript
+export { ExampleRetriever, createRetriever }
+export { indexExample, searchExamples }
+export { LocalStore }
+export type { StoredExample, ExampleQuery, RetrievalResult }
+```
+
+**Example Schema**:
+```typescript
+interface StoredExample {
+  id: string;
+  version: '1.0';
+
+  // Searchable metadata
+  index: {
+    layoutIntents: LayoutIntent['type'][];   // ['hero', 'grid', 'footer']
+    elementTypes: ElementType[];              // ['heading', 'button', 'image']
+    colorCount: number;                       // 5-8 typical
+    sectionCount: number;
+  };
+
+  // The actual example data
+  ir: UIBlueprint;                            // Full IR snapshot
+  themeJson: object;                          // Generated theme.json
+  patterns: PatternMapping[];                 // Section → pattern mappings
+
+  // Quality signal
+  validationScore: number;                    // Final similarity score
+
+  // Anonymized metadata
+  createdAt: string;
+  source: 'bundled' | 'local' | 'contributed';
+}
+
+interface PatternMapping {
+  sectionId: string;
+  intent: LayoutIntent;
+  blockMarkup: string;                        // The generated block pattern
+}
+```
+
+**Retrieval Algorithm**:
+```
+Input: Current UIBlueprint (partial or complete)
+
+1. Extract query features:
+   - Layout intents present
+   - Element types present
+   - Section count range
+
+2. Search local memory first (user's own patterns)
+
+3. Search bundled examples
+
+4. Rank by relevance:
+   - Intent match score (weighted highest)
+   - Element type overlap
+   - Validation score of example
+
+5. Return top-k examples with their patterns
+
+Output: Array<{ example: StoredExample, relevance: number }>
+```
+
+**Knowledge Distribution Strategy**:
+
+| Source | Description | Update Mechanism |
+|--------|-------------|------------------|
+| Bundled | Curated examples shipped with package | npm releases |
+| Local | User's successful conversions | Automatic on validation pass |
+| Contributed | Community examples (opt-in) | PR to examples repo |
+
+**Privacy Model**:
+- Local memory never leaves user's machine by default
+- Bundled examples contain no identifying URLs
+- Contribution requires explicit `wp-morph export-example --anonymize`
+
+**Dependencies**: `packages/core`
 
 ---
 

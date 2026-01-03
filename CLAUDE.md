@@ -38,6 +38,7 @@ Rendered UI → IR (Design Intent) → WordPress
 | `packages/validation` | Visual diff, correction signals |
 | `packages/wp-generator` | WordPress theme output |
 | `packages/bedrock-wrapper` | Bedrock filesystem wrapper |
+| `packages/memory` | Example storage, retrieval, cross-session learning |
 | `packages/cli` | CLI interface |
 
 ## Technology Stack
@@ -114,6 +115,27 @@ AI → Targeted fixes
 Repeat until: similarity >= 92% OR plateau OR max iterations
 ```
 
+### Cross-Session Learning
+
+The system improves over time without fine-tuning the LLM:
+
+```
+┌─────────────────────────────────────────┐
+│  Retriever                              │
+│  ┌──────────────┐  ┌──────────────────┐ │
+│  │ Local memory │ → │ Bundled examples │ │
+│  │ (private)    │   │ (ships w/ pkg)   │ │
+│  └──────────────┘   └──────────────────┘ │
+└─────────────────────────────────────────┘
+```
+
+- **Bundled examples**: Curated IR→WordPress mappings, versioned with releases
+- **Local memory**: User's successful conversions, never leaves their machine
+- **Retrieval**: During IR construction, fetch similar past examples as few-shot context
+- **Contribution**: Opt-in `wp-morph export-example --anonymize` for community PRs
+
+See `docs/architecture.md` → `packages/memory` for full spec.
+
 ### WordPress Output
 
 **Vanilla theme**:
@@ -178,6 +200,7 @@ When implementing features, prioritize in this order:
 | IR builder | `packages/intelligence/src/ir-builder.ts` |
 | Validation loop | `packages/validation/src/loop.ts` |
 | Theme generator | `packages/wp-generator/src/generator.ts` |
+| Example retriever | `packages/memory/src/retriever.ts` |
 | CLI entry | `packages/cli/src/index.ts` |
 
 ## Context for Future Sessions
