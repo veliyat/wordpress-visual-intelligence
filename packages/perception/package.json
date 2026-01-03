@@ -1,0 +1,30 @@
+{
+  "name": "@wp-morph/perception",
+  "version": "0.1.0",
+  "description": "Visual capture and section detection for wp-morph",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@wp-morph/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0"
+  }
+}

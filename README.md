@@ -101,6 +101,27 @@ The IR (UI Blueprint) is the brain of the system. Core properties:
 
 ## CLI Usage (Planned)
 
+### Interactive Mode
+
+```bash
+# Start interactive session
+wp-morph
+
+wp-morph> generate theme from https://example.com
+Analyzing... Found 5 sections.
+Generated theme at ./theme-output
+
+wp-morph> make the hero section taller
+Updated hero padding. Regenerating...
+
+wp-morph> validate
+Similarity: 94% ✓
+
+wp-morph> exit
+```
+
+### Non-Interactive Mode
+
 ```bash
 # Generate WordPress theme from URL
 wp-morph generate https://example.com --output ./my-theme

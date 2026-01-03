@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true
+  },
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/perception" },
+    { "path": "./packages/intelligence" },
+    { "path": "./packages/validation" },
+    { "path": "./packages/wp-generator" },
+    { "path": "./packages/bedrock-wrapper" },
+    { "path": "./packages/cli" }
+  ]
+}

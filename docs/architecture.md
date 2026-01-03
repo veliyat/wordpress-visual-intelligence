@@ -192,20 +192,83 @@ export type { BedrockConfig }
 
 ### packages/cli
 
-Command-line interface.
+Command-line interface with both non-interactive and interactive modes.
 
 **Responsibilities**:
 - Parse arguments and options
 - Orchestrate full pipeline
 - Progress reporting
 - Error handling
+- Interactive conversation loop (interactive mode)
+- AI-powered natural language command interpretation
 
-**Key Commands**:
+**Modes**:
+
+| Mode | Use Case |
+|------|----------|
+| Non-interactive | CI/CD, scripts, automation |
+| Interactive | Development, exploration, iterative refinement |
+
+**Non-Interactive Commands**:
 ```bash
-wp-visual generate <url> [options]
-wp-visual validate <original-url> <generated-path>
-wp-visual export <ir-path> --format <vanilla|bedrock>
+wp-morph generate <url> [options]
+wp-morph validate <original-url> <generated-path>
+wp-morph export <ir-path> --format <vanilla|bedrock>
 ```
+
+**Interactive Mode**:
+```bash
+wp-morph                    # Starts interactive mode
+wp-morph --interactive      # Explicit interactive flag
+wp-morph -i                 # Short flag
+```
+
+**Interactive Session Example**:
+```
+$ wp-morph
+
+wp-morph> generate theme from https://example.com
+Analyzing... Found 5 sections: hero, features, testimonials, pricing, footer.
+Extracting design tokens... 6 colors, base-8 spacing, 2 font families.
+Generated theme at ./theme-output
+
+wp-morph> make the hero section taller
+Updated hero section padding from 'lg' to 'xxl'.
+Regenerating theme...
+
+wp-morph> change primary color to a darker blue
+Found primary: #3b82f6. Suggested alternatives:
+  1. #2563eb (blue-600)
+  2. #1d4ed8 (blue-700)
+  3. Enter custom hex
+> 2
+Updated primary to #2563eb. Regenerating...
+
+wp-morph> validate
+Comparing original vs generated...
+Similarity: 89%
+Issues found:
+  - hero: vertical spacing +12px
+  - footer: text color mismatch (Delta-E: 4.2)
+
+Fix these automatically? [y/n/select]
+> y
+Applying corrections... Regenerating...
+New similarity: 94% ✓
+
+wp-morph> export --format bedrock
+Exported to ./theme-output-bedrock/
+
+wp-morph> exit
+```
+
+**Interactive Capabilities**:
+- Natural language commands interpreted by AI
+- Context-aware suggestions
+- Undo/redo support
+- Session history
+- Tab completion for commands and file paths
+- Real-time validation feedback
 
 **Dependencies**: All packages
 
