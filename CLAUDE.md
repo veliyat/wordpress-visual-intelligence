@@ -84,11 +84,32 @@ interface CorrectionSignal {
 
 ## Implementation Guidelines
 
-### AI Usage Strategy
+### AI vs Code Responsibilities
 
-- **AI does**: Detect layout intent, identify sections, extract elements
-- **Code does**: Color clustering (CIELAB, Delta-E < 2.0), spacing normalization (base-8)
-- **Correction passes**: AI receives structured JSON signals, not images
+We deliberately split work between AI and deterministic code:
+
+| Task | Owner | Rationale |
+|------|-------|-----------|
+| Detect layout intent | AI | Requires semantic understanding ("is this a hero?") |
+| Identify sections | AI | Visual boundary detection needs interpretation |
+| Extract elements | AI | Classifying content types requires context |
+| Name color tokens | AI | Semantic naming ("primary" vs "accent") |
+| Generate corrections | AI | Understanding what's wrong and suggesting fixes |
+| Color clustering | Code | Math is deterministic, precise (Delta-E < 2.0) |
+| Spacing normalization | Code | Rounding to base-8 is pure arithmetic |
+| Color space conversion | Code | CIELAB conversion is a formula |
+| Visual metrics (SSIM) | Code | Pixel comparison is mathematical |
+
+**Why this split?**
+- **Precision**: Code gives identical output for identical input
+- **Cost**: No API tokens for mathematical operations
+- **Speed**: No network latency for color math
+- **Testability**: Pure functions are easy to unit test
+- **AI for ambiguity**: AI handles "what does this mean?" questions
+
+**Implementation location**:
+- Code utilities: `packages/core/src/utils/` (color.ts, spacing.ts)
+- AI integration: `packages/intelligence/src/` (uses AI adapter from core)
 
 ### Token Normalization Rules
 
