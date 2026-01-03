@@ -15,7 +15,7 @@ This file provides context for Claude Code when working on this project.
 
 ### What This Project Is NOT
 
-- Not a site scraper
+- **Not a site scraper**: We don't parse HTML/CSS. We analyze screenshots and reason about design intent. This is a fundamental architectural decision, not just a semantic distinction.
 - Not a one-shot AI generator
 - Not SaaS-first
 - Not optimizing for pixel-perfect matches (structural/perceptual similarity is the goal)
@@ -110,6 +110,36 @@ We deliberately split work between AI and deterministic code:
 **Implementation location**:
 - Code utilities: `packages/core/src/utils/` (color.ts, spacing.ts)
 - AI integration: `packages/intelligence/src/` (uses AI adapter from core)
+
+### AI Perception Pipeline
+
+**Critical distinction**: wp-morph is NOT a scraper. We don't extract CSS values.
+
+```
+Screenshot → AI Perception → Estimates → Code Normalization → Tokens
+              (visual)       (fuzzy)      (deterministic)    (clean)
+```
+
+**How the AI sees colors and spacing**:
+- AI analyzes a screenshot image, not source code
+- Outputs are *perceptual estimates*, not exact values
+- "This looks like ~16px spacing" or "a blue around #3b82f6"
+- Estimates have inherent variance across multiple analyses
+
+**Why code utilities still matter**:
+1. **Normalize variance**: AI might report 14px, 16px, 18px for the same spacing → all become `md`
+2. **Cluster similar**: AI might see #3b82f6 and #3a83f5 as distinct → we merge them
+3. **Enforce consistency**: Output is always valid base-8 scale, valid color palette
+
+**Future integration points** (marked as TODO in code):
+- Accept AI confidence scores (weight high-confidence estimates more)
+- Preserve semantic labels from AI ("primary", "section-padding")
+- Support value ranges instead of exact numbers
+- Aggregate multiple AI observations of the same element
+
+See inline documentation in:
+- `packages/core/src/utils/color.ts` - AI Perception Integration Notes
+- `packages/core/src/utils/spacing.ts` - AI Perception Integration Notes
 
 ### Token Normalization Rules
 
@@ -217,6 +247,7 @@ When implementing features, prioritize in this order:
 | IR types | `packages/core/src/types/ir.ts` |
 | AI adapter | `packages/core/src/ai/adapter.ts` |
 | Color utils | `packages/core/src/utils/color.ts` |
+| Spacing utils | `packages/core/src/utils/spacing.ts` |
 | Screenshot capture | `packages/perception/src/capture.ts` |
 | IR builder | `packages/intelligence/src/ir-builder.ts` |
 | Validation loop | `packages/validation/src/loop.ts` |

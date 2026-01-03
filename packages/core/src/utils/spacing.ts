@@ -10,6 +10,36 @@
  * - lg:  24px (base*3)
  * - xl:  32px (base*4)
  * - xxl: 48px (base*6)
+ *
+ * ## AI Perception Integration Notes
+ *
+ * These utilities currently assume exact pixel values as input. However,
+ * wp-morph extracts spacing from AI analysis of screenshots, NOT from
+ * scraped CSS. This means:
+ *
+ * 1. **Spatial estimation variance**: AI estimating "about 16px" from a
+ *    screenshot may report 14px, 16px, or 18px across different analyses.
+ *    This is acceptable since we normalize anyway.
+ *
+ * 2. **Relative vs absolute**: AI might better express "double the small
+ *    spacing" rather than "32px". Consider accepting relative expressions.
+ *
+ * 3. **Context-dependent spacing**: The AI understands "section padding"
+ *    vs "text line-height" — semantics that pure numbers lose.
+ *
+ * 4. **Viewport dependency**: Spacing may vary by viewport. AI should
+ *    report the viewport context of its estimates.
+ *
+ * ### Future Considerations (TODO)
+ *
+ * - Accept spacing estimates with confidence scores
+ * - Support ranges (e.g., "between 14-18px")
+ * - Preserve semantic context ("section-gap", "element-margin")
+ * - Handle responsive spacing (mobile vs desktop estimates)
+ * - Weight by confidence when building scales from multiple observations
+ *
+ * @see packages/intelligence - produces the AI spacing estimates
+ * @see docs/architecture.md - full perception pipeline spec
  */
 
 // =============================================================================
@@ -40,6 +70,9 @@ export interface SpacingScaleString {
 export interface SpacingScaleOptions {
   format?: 'number' | 'px' | 'rem';
   baseFontSize?: number; // For rem conversion, default 16
+  // TODO: Add when integrating with AI perception layer:
+  // viewport?: 'mobile' | 'tablet' | 'desktop'; // Context for responsive scaling
+  // confidenceThreshold?: number; // Ignore low-confidence estimates
 }
 
 // =============================================================================
@@ -176,6 +209,28 @@ export function classifySpacing(value: number): SpacingClassification {
  * 2. Normalize each to base-8
  * 3. Cluster into 6 groups (xs through xxl)
  * 4. Use median of each cluster as scale value
+ *
+ * ## AI Perception Notes
+ *
+ * Current implementation treats all input values equally. When integrated
+ * with the AI perception layer, consider:
+ *
+ * - High-confidence estimates should have more weight in median calculation
+ * - Multiple observations of the same spacing should be aggregated first
+ * - Semantic categories (margin vs padding vs gap) might warrant separate scales
+ *
+ * @example Current usage (exact values)
+ * ```ts
+ * createSpacingScale([4, 8, 15, 25, 30, 50])
+ * ```
+ *
+ * @example Future usage (with AI metadata) - not yet implemented
+ * ```ts
+ * createSpacingScale([
+ *   { value: 15, confidence: 0.9, context: 'section-padding' },
+ *   { value: 8, confidence: 0.7, context: 'element-gap' },
+ * ])
+ * ```
  *
  * @param rawValues - Array of raw spacing values in pixels
  * @param options - Output format options

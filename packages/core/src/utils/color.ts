@@ -6,6 +6,33 @@
  *
  * Uses CIELAB color space for perceptual uniformity and
  * Delta-E (CIE76) for measuring color differences.
+ *
+ * ## AI Perception Integration Notes
+ *
+ * These utilities currently assume exact color values as input. However,
+ * wp-morph extracts colors from AI analysis of screenshots, NOT from
+ * scraped CSS. This means:
+ *
+ * 1. **Input uncertainty**: AI color estimates have inherent variance.
+ *    The same blue might be reported as #3b82f6, #3a83f5, or #3c81f7
+ *    across different analyses.
+ *
+ * 2. **Confidence levels**: AI may have varying confidence in color
+ *    identification (e.g., "definitely blue" vs "bluish-gray, unsure").
+ *
+ * 3. **Semantic context**: AI understands "this is the primary brand color"
+ *    which is lost when we only receive hex values.
+ *
+ * ### Future Considerations (TODO)
+ *
+ * - Accept color estimates with confidence scores
+ * - Support color ranges (min/max) instead of exact values
+ * - Preserve semantic labels from AI ("primary", "accent", "text")
+ * - Aggregate multiple AI observations of the same element
+ * - Adjust clustering threshold based on AI confidence
+ *
+ * @see packages/intelligence - produces the AI color estimates
+ * @see docs/architecture.md - full perception pipeline spec
  */
 
 // =============================================================================
@@ -34,11 +61,17 @@ export interface ColorCluster {
   value: string; // Hex color (centroid)
   count: number; // Number of colors in cluster
   colors: string[]; // Original colors in cluster
+  // TODO: Add when integrating with AI perception layer:
+  // semanticRole?: 'primary' | 'secondary' | 'accent' | 'text' | 'background' | 'surface';
+  // confidence?: number; // 0-1, aggregated from AI estimates
 }
 
 export interface ClusterOptions {
   threshold?: number; // Delta-E threshold for merging (default: 2.0)
   maxClusters?: number; // Maximum clusters to return (default: 8)
+  // TODO: Add when integrating with AI perception layer:
+  // weightByConfidence?: boolean; // Weight centroids by AI confidence
+  // preserveSemantics?: boolean; // Don't merge colors with different semantic roles
 }
 
 // =============================================================================
@@ -249,6 +282,30 @@ export function deltaE(lab1: LAB, lab2: LAB): number {
  * 3. Use centroid as cluster representative
  * 4. Sort by frequency (most common first)
  * 5. Limit to maxClusters
+ *
+ * ## AI Perception Notes
+ *
+ * Current implementation expects exact hex values. When integrated with
+ * the AI perception layer, consider:
+ *
+ * - AI estimates have variance; the default threshold (2.0) may need
+ *   adjustment based on observed AI consistency
+ * - Semantic roles from AI should prevent merging (don't merge "primary"
+ *   with "accent" even if perceptually similar)
+ * - Confidence-weighted centroids would better represent uncertain estimates
+ *
+ * @example Current usage (exact values)
+ * ```ts
+ * clusterColors(['#3b82f6', '#3a83f5', '#ff0000'])
+ * ```
+ *
+ * @example Future usage (with AI metadata) - not yet implemented
+ * ```ts
+ * clusterColors([
+ *   { hex: '#3b82f6', confidence: 0.9, role: 'primary' },
+ *   { hex: '#3a83f5', confidence: 0.7, role: 'primary' },
+ * ])
+ * ```
  */
 export function clusterColors(
   hexColors: string[],
