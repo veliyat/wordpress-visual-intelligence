@@ -1,19 +1,56 @@
 # wp-morph
 
-A CLI-first, open-source devtool that reconstructs visually accurate WordPress sites by reasoning about design intent, not HTML structure.
+An AI-powered, CLI-first devtool for WordPress—build from visual references, optimize existing sites, develop plugins, and more.
 
-## What This Is
+## The Problem
 
-- **Visual-first reconstruction**: Analyzes rendered UI, not source code
-- **Intermediate Representation (IR)**: Captures design intent as a stable, semantic blueprint
-- **Validation loop**: Iteratively improves output through visual comparison
-- **WordPress native**: Generates Gutenberg-based themes with proper design tokens
+You have a design—a live site, a mockup, a Figma export rendered in a browser. You need it as a WordPress theme. Current options:
+
+1. **Manual rebuild**: Hours of block editor work, eyeballing spacing and colors
+2. **Site scrapers**: Copy HTML that breaks on first edit
+3. **AI generators**: Describe what you want in words and hope for the best
+
+None of these start from what you actually have: **a visual reference**.
+
+## What wp-morph Does
+
+wp-morph takes a rendered UI and reconstructs it as a native WordPress theme by reasoning about **design intent**, not HTML structure.
+
+```
+Your design (URL/screenshot) → AI analyzes visual intent → WordPress theme
+                                        ↑                         ↓
+                                        └── Validation loop ──────┘
+```
+
+- **Input**: An existing visual design (URL, screenshot, rendered mockup)
+- **Output**: A portable, Gutenberg-based WordPress theme with proper design tokens
+- **Process**: Iterative refinement until output matches source (target: 92%+ similarity)
+
+## Use Cases
+
+**Theme Reconstruction**
+- Implement a client design as a WordPress theme
+- Migrate an existing site to WordPress
+- Reproduce a visual reference with structural fidelity
+
+**Site Optimization**
+- Analyze an existing WordPress site and optimize performance
+- Refactor themes for better maintainability
+- Audit and improve accessibility
+
+**Plugin Development**
+- Build custom plugins for existing WordPress sites
+- Extend functionality based on site requirements
+
+**General WordPress Development**
+- AI-assisted development with WordPress-specific context
+- Works from visual references, existing codebases, or descriptions
 
 ## What This Is NOT
 
-- Not a site scraper
-- Not a one-shot AI generator
-- Not SaaS-first
+- **Not a site scraper**: Doesn't blindly copy HTML; reasons about intent
+- **Not one-shot**: Uses a validation loop to iteratively improve accuracy
+- **Not SaaS-first**: Open-source CLI tool that produces portable artifacts
 
 ## Core Concept
 
