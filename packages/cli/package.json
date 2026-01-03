@@ -2,6 +2,15 @@
   "name": "@wp-morph/cli",
   "version": "0.1.0",
   "description": "CLI for wp-morph WordPress development tool",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fightrons/wp-morph.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/fightrons/wp-morph/issues"
+  },
+  "homepage": "https://github.com/fightrons/wp-morph/tree/main/packages/cli#readme",
   "type": "module",
   "bin": {
     "wp-morph": "./dist/index.js"

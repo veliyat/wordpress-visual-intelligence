@@ -2,6 +2,11 @@
   "name": "@wp-morph/wp-generator",
   "version": "0.1.0",
   "description": "WordPress theme generation from IR for wp-morph",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fightrons/wp-morph.git",
+    "directory": "packages/wp-generator"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "description": "AI-powered WordPress development tool",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fightrons/wp-morph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fightrons/wp-morph/issues"
+  },
+  "homepage": "https://github.com/fightrons/wp-morph#readme",
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",

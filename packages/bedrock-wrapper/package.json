@@ -2,6 +2,11 @@
   "name": "@wp-morph/bedrock-wrapper",
   "version": "0.1.0",
   "description": "Bedrock filesystem wrapper for wp-morph themes",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fightrons/wp-morph.git",
+    "directory": "packages/bedrock-wrapper"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

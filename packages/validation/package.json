@@ -2,6 +2,11 @@
   "name": "@wp-morph/validation",
   "version": "0.1.0",
   "description": "Visual comparison and correction signals for wp-morph",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fightrons/wp-morph.git",
+    "directory": "packages/validation"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

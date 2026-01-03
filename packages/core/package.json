@@ -2,6 +2,15 @@
   "name": "@wp-morph/core",
   "version": "0.1.0",
   "description": "Core types and utilities for wp-morph",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fightrons/wp-morph.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/fightrons/wp-morph/issues"
+  },
+  "homepage": "https://github.com/fightrons/wp-morph/tree/main/packages/core#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
