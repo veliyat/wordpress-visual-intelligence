@@ -2,13 +2,161 @@
  * Screenshot Capture
  *
  * Functions for capturing full-page and section-level screenshots.
+ * Uses chunked (tiled) capture as the default strategy for reliability.
  */
 
 import { createPage, navigateAndWait, DEFAULT_VIEWPORT, DEFAULT_TIMEOUT } from './browser';
-import type { Screenshot, SectionScreenshot, CaptureOptions, VisualBoundary } from './types';
+import type { Screenshot, SectionScreenshot, CaptureOptions } from './types';
+import type { Page } from 'playwright';
+import sharp from 'sharp';
+
+/** Threshold for detecting broken layout (scrollWidth > viewport * this) */
+const LAYOUT_BROKEN_THRESHOLD = 3;
+
+/** Delay between scroll steps to allow content to load */
+const SCROLL_DELAY_MS = 100;
+
+/**
+ * Check if page has broken layout (excessive horizontal overflow)
+ */
+async function isLayoutBroken(
+  page: Page,
+  viewportWidth: number
+): Promise<{ broken: boolean; scrollWidth: number; scrollHeight: number }> {
+  const dimensions = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    scrollHeight: document.documentElement.scrollHeight,
+  }));
+
+  return {
+    broken: dimensions.scrollWidth > viewportWidth * LAYOUT_BROKEN_THRESHOLD,
+    scrollWidth: dimensions.scrollWidth,
+    scrollHeight: dimensions.scrollHeight,
+  };
+}
+
+/**
+ * Pre-scroll the page to trigger lazy loading
+ */
+async function preScrollPage(page: Page, viewportHeight: number): Promise<number> {
+  const totalHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+
+  // Scroll through the page in viewport-sized steps
+  for (let y = 0; y < totalHeight; y += viewportHeight) {
+    await page.evaluate((scrollY) => window.scrollTo(0, scrollY), y);
+    await page.waitForTimeout(SCROLL_DELAY_MS);
+  }
+
+  // Scroll back to top
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(SCROLL_DELAY_MS);
+
+  // Re-measure height (may have changed due to lazy loading)
+  return await page.evaluate(() => document.documentElement.scrollHeight);
+}
+
+/**
+ * Capture page using chunked (tiled) approach
+ *
+ * This is the reliable method that works for any page, regardless of
+ * broken CSS or excessive dimensions. Captures viewport-sized tiles
+ * and stitches them together.
+ */
+async function captureChunked(
+  page: Page,
+  viewport: { width: number; height: number }
+): Promise<Screenshot> {
+  // Pre-scroll to load lazy content
+  const totalHeight = await preScrollPage(page, viewport.height);
+
+  // Capture tiles
+  const tiles: { buffer: Buffer; y: number; height: number }[] = [];
+
+  for (let y = 0; y < totalHeight; y += viewport.height) {
+    // Scroll to position
+    await page.evaluate((scrollY) => window.scrollTo(0, scrollY), y);
+    await page.waitForTimeout(SCROLL_DELAY_MS);
+
+    // Calculate tile height (last tile may be shorter)
+    const tileHeight = Math.min(viewport.height, totalHeight - y);
+
+    // Capture this viewport
+    const buffer = await page.screenshot({
+      type: 'png',
+      clip: {
+        x: 0,
+        y: 0,
+        width: viewport.width,
+        height: tileHeight,
+      },
+    });
+
+    tiles.push({
+      buffer: Buffer.from(buffer),
+      y,
+      height: tileHeight,
+    });
+  }
+
+  // Stitch tiles together using sharp
+  const composite = tiles.map((tile) => ({
+    input: tile.buffer,
+    top: tile.y,
+    left: 0,
+  }));
+
+  const stitched = await sharp({
+    create: {
+      width: viewport.width,
+      height: totalHeight,
+      channels: 4,
+      background: { r: 255, g: 255, b: 255, alpha: 1 },
+    },
+  })
+    .composite(composite)
+    .png()
+    .toBuffer();
+
+  return {
+    buffer: stitched,
+    width: viewport.width,
+    height: totalHeight,
+    format: 'png',
+  };
+}
+
+/**
+ * Capture using native Playwright fullPage option
+ *
+ * This is faster but may fail on pages with broken layout.
+ */
+async function captureNativeFullPage(
+  page: Page,
+  _viewport: { width: number; height: number }
+): Promise<Screenshot> {
+  const buffer = await page.screenshot({
+    fullPage: true,
+    type: 'png',
+  });
+
+  const dimensions = await page.evaluate(() => ({
+    width: document.documentElement.scrollWidth,
+    height: document.documentElement.scrollHeight,
+  }));
+
+  return {
+    buffer: Buffer.from(buffer),
+    width: dimensions.width,
+    height: dimensions.height,
+    format: 'png',
+  };
+}
 
 /**
  * Capture a full-page screenshot from a URL
+ *
+ * Uses chunked capture for pages with broken layout, native fullPage
+ * for normal pages (with fallback to chunked if native fails).
  *
  * @example
  * ```typescript
@@ -36,84 +184,36 @@ export async function captureFullPage(
       waitUntil,
     });
 
-    // Get actual page dimensions
-    const dimensions = await page.evaluate(() => ({
-      width: document.documentElement.scrollWidth,
-      height: document.documentElement.scrollHeight,
-    }));
-
-    // Detect horizontal overflow (page wider than viewport)
-    const hasHorizontalOverflow = dimensions.width > viewport.width * 1.5;
-
-    let buffer: Buffer;
-    let capturedWidth: number;
-    let capturedHeight: number;
-
-    if (fullPage && hasHorizontalOverflow) {
-      // Page has broken CSS causing horizontal overflow
-      // Inject CSS to hide horizontal overflow and constrain width
-      await page.addStyleTag({
-        content: `
-          html, body {
-            overflow-x: hidden !important;
-            max-width: ${viewport.width}px !important;
-            width: ${viewport.width}px !important;
-          }
-          * {
-            max-width: 100% !important;
-          }
-        `,
-      });
-
-      // Wait for reflow
-      await page.waitForTimeout(100);
-
-      // Re-measure after CSS fix
-      const fixedDimensions = await page.evaluate(() => ({
-        width: document.documentElement.scrollWidth,
-        height: document.documentElement.scrollHeight,
-      }));
-
-      // Try fullPage capture, fallback to viewport if it crashes
-      try {
-        buffer = await page.screenshot({
-          fullPage: true,
-          type: 'png',
-        });
-        capturedWidth = fixedDimensions.width;
-        capturedHeight = fixedDimensions.height;
-      } catch {
-        // Browser crashed trying to capture - fall back to viewport only
-        // Need to reconnect since the page/browser may have crashed
-        throw new Error(
-          `Page too large to capture (${dimensions.width}x${dimensions.height}px). ` +
-          `Try with fullPage: false`
-        );
-      }
-    } else if (fullPage) {
-      // Normal full page capture
-      buffer = await page.screenshot({
-        fullPage: true,
-        type: 'png',
-      });
-      capturedWidth = dimensions.width;
-      capturedHeight = dimensions.height;
-    } else {
-      // Viewport only
-      buffer = await page.screenshot({
+    // If not capturing full page, just take viewport screenshot
+    if (!fullPage) {
+      const buffer = await page.screenshot({
         fullPage: false,
         type: 'png',
       });
-      capturedWidth = viewport.width;
-      capturedHeight = viewport.height;
+
+      return {
+        buffer: Buffer.from(buffer),
+        width: viewport.width,
+        height: viewport.height,
+        format: 'png',
+      };
     }
 
-    return {
-      buffer: Buffer.from(buffer),
-      width: capturedWidth,
-      height: capturedHeight,
-      format: 'png',
-    };
+    // Check for broken layout
+    const layout = await isLayoutBroken(page, viewport.width);
+
+    if (layout.broken) {
+      // Layout is broken - use chunked capture (the only reliable method)
+      return await captureChunked(page, viewport);
+    }
+
+    // Layout looks normal - try native fullPage (faster)
+    try {
+      return await captureNativeFullPage(page, viewport);
+    } catch {
+      // Native failed (memory limits, etc.) - fall back to chunked
+      return await captureChunked(page, viewport);
+    }
   } finally {
     await page.close();
   }
@@ -145,44 +245,44 @@ export async function captureSections(
       waitUntil,
     });
 
-    // First capture full page to detect boundaries
-    const fullBuffer = await page.screenshot({
-      fullPage: true,
-      type: 'png',
-    });
+    // First capture full page (using chunked for reliability)
+    const layout = await isLayoutBroken(page, viewport.width);
+    let fullScreenshot: Screenshot;
 
-    const fullScreenshot: Screenshot = {
-      buffer: Buffer.from(fullBuffer),
-      width: viewport.width,
-      height: await page.evaluate(() => document.documentElement.scrollHeight),
-      format: 'png',
-    };
+    if (layout.broken) {
+      fullScreenshot = await captureChunked(page, viewport);
+    } else {
+      try {
+        fullScreenshot = await captureNativeFullPage(page, viewport);
+      } catch {
+        fullScreenshot = await captureChunked(page, viewport);
+      }
+    }
 
     // Import boundary detection (dynamic to avoid circular deps)
     const { detectVisualBoundaries } = await import('./boundaries');
     const boundaries = await detectVisualBoundaries(fullScreenshot);
 
-    // Capture each section
+    // Extract sections from the full screenshot using sharp
     const sections: SectionScreenshot[] = [];
 
     for (let i = 0; i < boundaries.length; i++) {
       const boundary = boundaries[i];
       const height = boundary.bottom - boundary.top;
 
-      // Clip the section from the full screenshot
-      const sectionBuffer = await page.screenshot({
-        fullPage: false,
-        type: 'png',
-        clip: {
-          x: 0,
-          y: boundary.top,
+      // Extract region from full screenshot
+      const sectionBuffer = await sharp(fullScreenshot.buffer)
+        .extract({
+          left: 0,
+          top: boundary.top,
           width: viewport.width,
           height,
-        },
-      });
+        })
+        .png()
+        .toBuffer();
 
       sections.push({
-        buffer: Buffer.from(sectionBuffer),
+        buffer: sectionBuffer,
         width: viewport.width,
         height,
         format: 'png',
@@ -223,9 +323,20 @@ export async function captureRegion(
       waitUntil,
     });
 
+    // Scroll to region if needed
+    if (region.y > viewport.height) {
+      await page.evaluate((scrollY) => window.scrollTo(0, scrollY), region.y);
+      await page.waitForTimeout(SCROLL_DELAY_MS);
+    }
+
     const buffer = await page.screenshot({
       type: 'png',
-      clip: region,
+      clip: {
+        x: region.x,
+        y: region.y % viewport.height, // Adjust for scroll position
+        width: region.width,
+        height: region.height,
+      },
     });
 
     return {

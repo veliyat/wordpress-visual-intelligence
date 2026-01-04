@@ -82,7 +82,15 @@ describe('Browser Management', () => {
 
       const browser = await getBrowser();
 
-      expect(chromium.launch).toHaveBeenCalledWith({ headless: true });
+      expect(chromium.launch).toHaveBeenCalledWith({
+        headless: true,
+        args: [
+          '--disable-gpu',
+          '--disable-software-rasterizer',
+          '--disable-dev-shm-usage',
+          '--no-sandbox',
+        ],
+      });
       expect(browser).toBeDefined();
     });
 

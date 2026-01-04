@@ -1,217 +1,111 @@
-# Perception Package - Development Notes
+# Perception Package
+
+Visual capture and section detection for wp-morph.
 
 ## Overview
 
-The perception package handles visual capture and section detection:
+The perception package handles:
 - Launch headless browser via Playwright
-- Capture full-page screenshots
+- Capture full-page screenshots (with chunked capture for reliability)
 - Detect visual section boundaries (via AI)
 - Preprocess images for analysis
 
-## Current Status
+## Architecture
 
-### Working Features
+### Capture Strategy
 
-1. **Basic screenshot capture** - `captureFullPage()` works for normal pages
-2. **Viewport-only capture** - `fullPage: false` works reliably
-3. **Wait strategies** - Supports `'load'`, `'domcontentloaded'`, `'networkidle'`
-4. **Overflow detection** - Detects pages with broken CSS causing horizontal overflow
-5. **Boundary detection** - `detectVisualBoundaries()` works with AI API key
-6. **Edge snapping** - `snapToEdge()` refines AI boundary estimates
-
-### Test Results
-
-| Site | Dimensions | Status |
-|------|-----------|--------|
-| amystarfinancials.com | 1440×3621px | ✅ Full page capture works |
-| ompreefinancial.com | 1001319×4518px | ⚠️ Has CSS overflow bug, crashes on fullPage |
-| fightrons.com | 1440×900px | ✅ Works (single viewport height) |
-
----
-
-## Known Issue: Large/Broken Page Capture
-
-### Problem Description
-
-Some websites have CSS bugs that cause massive horizontal overflow. Example:
-
-**Site**: `https://ompreefinancial.com/`
-- **Reported scrollWidth**: 1,001,319 pixels (over 1 million!)
-- **Actual visible content**: ~1440 × 4518 pixels
-- **Root cause**: Broken CSS causing horizontal overflow
-
-When Playwright attempts `fullPage: true` on such pages, Chromium crashes:
+We use **chunked (tiled) capture** as the primary strategy for reliability:
 
 ```
-page.screenshot: Target page, context or browser has been closed
-WARNING: tile memory limits exceeded, some content may not draw
+┌─────────────────────────────────────────────────────────┐
+│                    captureFullPage()                     │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│   1. Check layout: isLayoutBroken(page, viewport)       │
+│                                                         │
+│   2a. If broken (scrollWidth > viewport × 3):          │
+│       → Use captureChunked() immediately                │
+│                                                         │
+│   2b. If normal:                                        │
+│       → Try captureNativeFullPage()                     │
+│       → If fails, fallback to captureChunked()          │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
 ```
 
-The browser runs out of GPU/tile memory trying to render a canvas that's millions of pixels wide.
+### Why Chunked Capture?
 
-### What We've Tried
+Some websites have broken CSS causing massive horizontal overflow:
 
-#### 1. Longer Timeouts
-```typescript
-await captureFullPage(url, { timeout: 60000 });
 ```
-**Result**: No effect - this is a memory issue, not a timeout issue.
-
-#### 2. GPU Flags in Browser Launch
-```typescript
-browserInstance = await chromium.launch({
-  headless: true,
-  args: [
-    '--disable-gpu',
-    '--disable-software-rasterizer',
-    '--disable-dev-shm-usage',
-    '--no-sandbox',
-  ],
-});
-```
-**Result**: No effect - the issue is Chromium's tile memory limits, not GPU rendering per se.
-
-#### 3. CSS Injection to Constrain Width
-```typescript
-await page.addStyleTag({
-  content: `
-    html, body {
-      overflow-x: hidden !important;
-      max-width: ${viewport.width}px !important;
-      width: ${viewport.width}px !important;
-    }
-    * {
-      max-width: 100% !important;
-    }
-  `,
-});
-```
-**Result**: CSS is injected, but `fullPage: true` still tries to capture the original dimensions and crashes. The CSS affects rendering but not the reported `scrollWidth`.
-
-#### 4. Clip Option
-```typescript
-await page.screenshot({
-  clip: { x: 0, y: 0, width: 1440, height: 4518 }
-});
-```
-**Result**: `clip` only works within the current viewport bounds. It doesn't scroll - just crops the visible area.
-
-### Current Workaround
-
-The code detects horizontal overflow and throws a descriptive error:
-```typescript
-const hasHorizontalOverflow = dimensions.width > viewport.width * 1.5;
-
-if (fullPage && hasHorizontalOverflow) {
-  // Attempt CSS fix and capture...
-  // If it fails, throw error suggesting fullPage: false
-}
+Example: ompreefinancial.com
+- Reported scrollWidth: 1,001,319px (over 1 million!)
+- Actual visible content: 1440×4518px
 ```
 
-User can then retry with `fullPage: false` to get viewport-only capture.
+When Playwright requests `fullPage: true`, Chromium tries to allocate a surface for the entire layout (1M × 4.5K pixels), hits tile memory limits, and crashes.
 
-### Remaining Solutions to Explore
+**No timeout, no flag, no CSS injection can fix this** - the layout is already computed.
 
-#### Option A: Chunked Capture + Stitching
-Capture the page in viewport-sized chunks by scrolling, then stitch together:
+The solution: **Don't ask Chromium to render an insane canvas.**
+
+### Chunked Capture Algorithm
 
 ```typescript
-async function captureFullPageChunked(page, viewport) {
-  const height = await page.evaluate(() => document.documentElement.scrollHeight);
-  const chunks: Buffer[] = [];
+1. Pre-scroll page (triggers lazy loading)
+   for (y = 0; y < totalHeight; y += viewportHeight) {
+     scrollTo(0, y)
+     wait(100ms)
+   }
 
-  for (let y = 0; y < height; y += viewport.height) {
-    await page.evaluate((scrollY) => window.scrollTo(0, scrollY), y);
-    await page.waitForTimeout(100); // Wait for render
+2. Capture viewport-sized tiles
+   for (y = 0; y < totalHeight; y += viewportHeight) {
+     scrollTo(0, y)
+     capture(clip: { x:0, y:0, width:viewport, height:tile })
+   }
 
-    const chunk = await page.screenshot({
-      fullPage: false,
-      clip: { x: 0, y: 0, width: viewport.width, height: Math.min(viewport.height, height - y) }
-    });
-    chunks.push(chunk);
-  }
-
-  // Use sharp or canvas to stitch chunks vertically
-  return stitchImages(chunks);
-}
+3. Stitch tiles using sharp
+   sharp.create(width, totalHeight)
+     .composite(tiles)
+     .toBuffer()
 ```
 
-**Pros**: Works regardless of page width
-**Cons**: Requires image processing library (sharp), more complex, potential seam artifacts
+This produces a true full-page image identical to what a human sees when scrolling.
 
-#### Option B: Resize Viewport to Full Height
-Create page with viewport matching full page height:
+## API
+
+### captureFullPage
 
 ```typescript
-const height = await page.evaluate(() => document.documentElement.scrollHeight);
-await page.setViewportSize({ width: 1440, height });
-await page.screenshot({ fullPage: false }); // Now viewport = full page
-```
-
-**Pros**: Simple, single capture
-**Cons**: Very tall viewports might still hit memory limits
-
-#### Option C: CDP (Chrome DevTools Protocol) Direct
-Use lower-level CDP commands for more control:
-
-```typescript
-const client = await page.context().newCDPSession(page);
-await client.send('Page.captureScreenshot', {
-  format: 'png',
-  clip: { x: 0, y: 0, width: 1440, height: 4518, scale: 1 },
-  captureBeyondViewport: true,
-});
-```
-
-**Pros**: More control over capture behavior
-**Cons**: Playwright abstraction leakage, may have same limits
-
-#### Option D: Firefox/WebKit Backend
-Try a different browser engine that might handle large pages differently:
-
-```typescript
-import { firefox } from 'playwright';
-const browser = await firefox.launch();
-```
-
-**Pros**: Different rendering engine, different limits
-**Cons**: Behavioral differences, need to test
-
----
-
-## File Structure
-
-```
-packages/perception/
-├── src/
-│   ├── index.ts          # Public exports
-│   ├── types.ts          # Type definitions
-│   ├── browser.ts        # Browser singleton management
-│   ├── capture.ts        # Screenshot capture functions
-│   ├── boundaries.ts     # AI-powered boundary detection
-│   ├── edge-snap.ts      # Edge snapping algorithm
-│   └── __tests__/        # Unit tests
-├── test-manual.ts        # Manual testing script
-└── PERCEPTION.md         # This file
-```
-
-## Usage
-
-### Basic Capture
-```typescript
-import { captureFullPage, closeBrowser } from '@wp-morph/perception';
+import { captureFullPage } from '@wp-morph/perception';
 
 const screenshot = await captureFullPage('https://example.com', {
-  timeout: 60000,
-  waitUntil: 'load',  // 'load' | 'domcontentloaded' | 'networkidle'
-  fullPage: true,     // false for viewport only
+  viewport: { width: 1440, height: 900 },  // Default
+  fullPage: true,                           // Default
+  timeout: 30000,                           // Default
+  waitUntil: 'networkidle',                 // 'load' | 'domcontentloaded' | 'networkidle'
+  waitForSelector: '#main-content',         // Optional
 });
 
-console.log(`Captured: ${screenshot.width}x${screenshot.height}`);
-await closeBrowser();
+console.log(`${screenshot.width}×${screenshot.height}px`);
 ```
 
-### With Boundary Detection (requires AI API key)
+### captureSections
+
+```typescript
+import { captureSections } from '@wp-morph/perception';
+
+// Requires ANTHROPIC_API_KEY or OPENAI_API_KEY
+const sections = await captureSections('https://example.com');
+
+sections.forEach((section, i) => {
+  console.log(`Section ${i}: ${section.width}×${section.height}px`);
+  console.log(`  Position: y=${section.boundingBox.y}`);
+});
+```
+
+### detectVisualBoundaries
+
 ```typescript
 import { captureFullPage, detectVisualBoundaries } from '@wp-morph/perception';
 
@@ -223,41 +117,87 @@ boundaries.forEach((b, i) => {
 });
 ```
 
-### Manual Test Script
-```bash
-# Set API key for boundary detection
-export ANTHROPIC_API_KEY=your-key
+### closeBrowser
 
-# Run test
-cd packages/perception
-npx tsx test-manual.ts https://example.com
+```typescript
+import { closeBrowser } from '@wp-morph/perception';
+
+// Clean up when done
+await closeBrowser();
 ```
-
----
 
 ## Configuration
 
+### Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `ANTHROPIC_API_KEY` | AI boundary detection (Claude) |
+| `OPENAI_API_KEY` | AI boundary detection (GPT-4V) |
+
 ### CaptureOptions
+
 ```typescript
 interface CaptureOptions {
   viewport?: { width: number; height: number };  // Default: 1440×900
   fullPage?: boolean;                            // Default: true
-  waitForSelector?: string;                      // Optional CSS selector to wait for
+  waitForSelector?: string;                      // Wait for element
   timeout?: number;                              // Default: 30000ms
-  waitUntil?: 'load' | 'domcontentloaded' | 'networkidle';  // Default: 'networkidle'
+  waitUntil?: 'load' | 'domcontentloaded' | 'networkidle';
 }
 ```
 
-### Environment Variables
-- `ANTHROPIC_API_KEY` - Required for AI boundary detection (Claude)
-- `OPENAI_API_KEY` - Alternative for AI boundary detection (GPT-4V)
+## Manual Testing
 
----
+```bash
+cd packages/perception
 
-## Next Steps
+# Basic test
+npx tsx test-manual.ts https://example.com
 
-1. **Implement chunked capture** for pages with horizontal overflow
-2. **Add image stitching** using sharp library
-3. **Test with more edge cases** (lazy loading, infinite scroll, SPAs)
-4. **Performance optimization** for large pages
-5. **Add retry logic** for transient failures
+# With AI boundary detection
+ANTHROPIC_API_KEY=your-key npx tsx test-manual.ts https://example.com
+```
+
+Output is saved to `output/<domain>/`:
+```
+output/
+├── example.com/
+│   ├── full-page.png
+│   └── section-1.png (if AI key provided)
+└── another-site.com/
+    └── full-page.png
+```
+
+## Test Results
+
+| Site | Layout | Dimensions | Size | Method |
+|------|--------|-----------|------|--------|
+| amystarfinancials.com | Normal | 1440×3621px | 1.4MB | Native |
+| ompreefinancial.com | Broken* | 1440×4518px | 3.5MB | Chunked |
+| fightrons.com | Normal | 1440×900px | 723KB | Native |
+
+*Broken = scrollWidth > viewport × 3 (CSS horizontal overflow bug)
+
+## File Structure
+
+```
+packages/perception/
+├── src/
+│   ├── index.ts          # Public exports
+│   ├── types.ts          # Type definitions
+│   ├── browser.ts        # Browser singleton management
+│   ├── capture.ts        # Screenshot capture (native + chunked)
+│   ├── boundaries.ts     # AI-powered boundary detection
+│   ├── edge-snap.ts      # Edge snapping algorithm
+│   └── __tests__/        # Unit tests
+├── test-manual.ts        # Manual testing script
+├── PERCEPTION.md         # This file
+└── package.json
+```
+
+## Dependencies
+
+- `playwright` - Browser automation
+- `sharp` - Image processing (stitching tiles)
+- `@wp-morph/core` - AI adapter for boundary detection
