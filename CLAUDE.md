@@ -242,18 +242,22 @@ When implementing features, prioritize in this order:
 
 ## Quick Reference
 
-| Concept | Location |
-|---------|----------|
-| IR types | `packages/core/src/types/ir.ts` |
-| AI adapter | `packages/core/src/ai/adapter.ts` |
-| Color utils | `packages/core/src/utils/color.ts` |
-| Spacing utils | `packages/core/src/utils/spacing.ts` |
-| Screenshot capture | `packages/perception/src/capture.ts` |
-| IR builder | `packages/intelligence/src/ir-builder.ts` |
-| Validation loop | `packages/validation/src/loop.ts` |
-| Theme generator | `packages/wp-generator/src/generator.ts` |
-| Example retriever | `packages/memory/src/retriever.ts` |
-| CLI entry | `packages/cli/src/index.ts` |
+| Concept | Location | Status |
+|---------|----------|--------|
+| IR types | `packages/core/src/types/ir.ts` | ✅ Implemented |
+| Color utils | `packages/core/src/utils/color.ts` | ✅ Implemented |
+| Spacing utils | `packages/core/src/utils/spacing.ts` | ✅ Implemented |
+| AI adapter | `packages/core/src/ai/adapter.ts` | ✅ Implemented |
+| Example retriever | `packages/memory/src/retriever.ts` | ✅ Implemented |
+| Example indexer | `packages/memory/src/indexer.ts` | ✅ Implemented |
+| Local store | `packages/memory/src/local-store.ts` | ✅ Implemented |
+| Screenshot capture | `packages/perception/src/capture.ts` | ✅ Implemented |
+| Boundary detection | `packages/perception/src/boundaries.ts` | ✅ Implemented |
+| Edge-snap algorithm | `packages/perception/src/edge-snap.ts` | ✅ Implemented |
+| IR builder | `packages/intelligence/src/ir-builder.ts` | 📋 Planned |
+| Validation loop | `packages/validation/src/loop.ts` | 📋 Planned |
+| Theme generator | `packages/wp-generator/src/generator.ts` | 📋 Planned |
+| CLI entry | `packages/cli/src/index.ts` | 📋 Stub only |
 
 ## Context for Future Sessions
 

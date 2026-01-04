@@ -10,5 +10,26 @@
  * - Preprocess images for analysis
  */
 
-// Placeholder exports - implementation pending
-export {};
+// Types
+export type {
+  Screenshot,
+  SectionScreenshot,
+  BoundingBox,
+  VisualBoundary,
+  CaptureOptions,
+  ApproximateBoundary,
+  EdgeSnapResult,
+  RowPixelData,
+} from './types';
+
+// Screenshot capture
+export { captureFullPage, captureSections, captureRegion } from './capture';
+
+// Boundary detection
+export { detectVisualBoundaries, detectBoundariesAIOnly } from './boundaries';
+
+// Edge snapping (exposed for testing/advanced use)
+export { snapToEdge, snapBoundaries } from './edge-snap';
+
+// Browser management
+export { getBrowser, closeBrowser, createPage } from './browser';

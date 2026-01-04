@@ -71,6 +71,7 @@ packages/
 ├── validation/        # Visual diff & correction signals
 ├── wp-generator/      # WordPress theme output
 ├── bedrock-wrapper/   # Optional Bedrock filesystem wrapper
+├── memory/            # Cross-session learning & example retrieval
 └── cli/               # Canonical interface
 ```
 
@@ -164,7 +165,20 @@ wp-morph export ./blueprint.json --format vanilla
 
 ## Development Status
 
-**Current**: Planning phase - architecture defined, implementation pending
+**Current**: Early implementation phase
+
+| Package | Status |
+|---------|--------|
+| `core` | ✅ Implemented - IR types, color/spacing utilities (100 tests) |
+| `memory` | ✅ Implemented - Local/bundled example retrieval (82 tests) |
+| `perception` | 📋 Contract tests defined, implementation pending |
+| `intelligence` | 📋 Contract tests defined, implementation pending |
+| `validation` | 📋 Contract tests defined, implementation pending |
+| `wp-generator` | 📋 Contract tests defined, implementation pending |
+| `bedrock-wrapper` | 📋 Contract tests defined, implementation pending |
+| `cli` | 📋 Contract tests defined, implementation pending |
+
+All 327 tests passing.
 
 See [docs/architecture.md](docs/architecture.md) for detailed technical specification.
 
