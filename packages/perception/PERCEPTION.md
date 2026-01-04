@@ -90,6 +90,49 @@ The chunked capture implementation has the following issues that need to be addr
 - Add overlap between tiles to prevent seam artifacts
 - Test with more edge cases (sticky headers, fixed elements, etc.)
 
+### When Automated Capture Fails
+
+Automated capture may fail due to:
+
+**Broken/Problematic Sites:**
+- **Horizontal overflow**: CSS bugs causing massive scrollWidth (1M+ pixels)
+- **Infinite scroll**: Page keeps loading content endlessly
+- **Heavy JavaScript/SPA**: Content requires JS execution to render
+- **Lazy loading issues**: Images/content fail to trigger loading
+- **Persistent loaders**: Animations that never complete
+- **Sticky/fixed headers**: Elements that overlap content during scroll capture
+- **Iframes**: Cross-origin content that can't be captured
+- **Canvas/WebGL**: Dynamically rendered content
+- **Cookie banners/modals**: Overlays blocking the view
+
+**Access Restrictions:**
+- **Bot detection**: Cloudflare, reCAPTCHA, hCaptcha challenges
+- **Authentication**: Login-protected or paywalled content
+- **Headless detection**: Sites that block automated browsers
+- **Geo-blocking**: Region-restricted content
+
+**Solution: User-provided screenshots**
+
+The simplest and most reliable fallback is to have the user provide their own screenshot:
+
+1. User opens the site in their browser
+2. User dismisses any popups/banners
+3. User takes a full-page screenshot (browser extensions or dev tools)
+4. User provides the screenshot file to wp-morph
+
+This approach:
+- **Works for all broken sites**: User's browser renders correctly
+- **Bypasses all restrictions**: User is already authenticated
+- **Handles edge cases**: User can dismiss modals, wait for loaders
+- **Guarantees accuracy**: User verifies the screenshot looks correct
+
+This aligns with wp-morph's core philosophy: **we analyze screenshots, not HTML/CSS**. The source of the screenshot doesn't matter - what matters is that it accurately represents the visual design.
+
+```bash
+# Future support (not yet implemented)
+npx tsx test-manual.ts ./user-screenshot.png
+```
+
 ## API
 
 ### captureFullPage
