@@ -73,6 +73,10 @@ export interface CaptureOptions {
   timeout?: number;
   /** When to consider navigation complete (default: 'networkidle') */
   waitUntil?: 'load' | 'domcontentloaded' | 'networkidle';
+  /** Additional delay after page load in ms (default: 0) */
+  delay?: number;
+  /** Wait for all images to load (default: true) */
+  waitForImages?: boolean;
 }
 
 /**

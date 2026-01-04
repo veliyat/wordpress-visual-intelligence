@@ -70,7 +70,25 @@ The solution: **Don't ask Chromium to render an insane canvas.**
      .toBuffer()
 ```
 
-This produces a true full-page image identical to what a human sees when scrolling.
+This should produce a true full-page image identical to what a human sees when scrolling.
+
+### Known Issues: Chunked Capture
+
+**Status: Needs Refinement**
+
+The chunked capture implementation has the following issues that need to be addressed:
+
+1. **Incomplete scrolling**: The page is not being fully scrolled in some cases, resulting in missing content at the bottom
+2. **Broken stitching**: The tiles are not being stitched correctly, causing visual artifacts or misaligned sections
+3. **Scroll position mismatch**: The clip coordinates may not align properly with the scroll position
+
+**Current workaround**: For pages with normal layout, the native `fullPage: true` capture works correctly. The chunked capture is only triggered for pages with broken CSS (scrollWidth > viewport × 3).
+
+**TODO**:
+- Debug tile capture coordinates
+- Verify scroll position before each tile capture
+- Add overlap between tiles to prevent seam artifacts
+- Test with more edge cases (sticky headers, fixed elements, etc.)
 
 ## API
 

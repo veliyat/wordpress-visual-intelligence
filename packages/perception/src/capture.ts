@@ -16,6 +16,45 @@ const LAYOUT_BROKEN_THRESHOLD = 3;
 /** Delay between scroll steps to allow content to load */
 const SCROLL_DELAY_MS = 100;
 
+/** Default delay after page load (allows loaders/animations to complete) */
+const DEFAULT_DELAY_MS = 2000;
+
+/**
+ * Wait for all images on the page to load
+ * Handles: img elements, picture/source, and lazy-loaded images
+ */
+async function waitForAllImages(page: Page, timeout: number): Promise<void> {
+  await page.evaluate(async (timeoutMs) => {
+    // Trigger lazy loading by checking visibility
+    const lazyImages = document.querySelectorAll('img[data-src], img[loading="lazy"]');
+    lazyImages.forEach((img) => {
+      // Force the image to load by removing lazy attributes
+      const dataSrc = img.getAttribute('data-src');
+      if (dataSrc && !img.getAttribute('src')) {
+        img.setAttribute('src', dataSrc);
+      }
+    });
+
+    // Get all images including those in picture elements
+    const images = Array.from(document.querySelectorAll('img'));
+
+    await Promise.race([
+      Promise.all(
+        images.map((img) => {
+          if (img.complete && img.naturalHeight > 0) return Promise.resolve();
+          return new Promise<void>((resolve) => {
+            img.addEventListener('load', () => resolve());
+            img.addEventListener('error', () => resolve()); // Don't fail on broken images
+            // Also resolve after a short timeout per image
+            setTimeout(() => resolve(), 5000);
+          });
+        })
+      ),
+      new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
+  }, timeout);
+}
+
 /**
  * Check if page has broken layout (excessive horizontal overflow)
  */
@@ -38,13 +77,15 @@ async function isLayoutBroken(
 /**
  * Pre-scroll the page to trigger lazy loading
  */
-async function preScrollPage(page: Page, viewportHeight: number): Promise<number> {
+async function preScrollPage(page: Page, viewportHeight: number, timeout: number): Promise<number> {
   const totalHeight = await page.evaluate(() => document.documentElement.scrollHeight);
 
   // Scroll through the page in viewport-sized steps
   for (let y = 0; y < totalHeight; y += viewportHeight) {
     await page.evaluate((scrollY) => window.scrollTo(0, scrollY), y);
     await page.waitForTimeout(SCROLL_DELAY_MS);
+    // Wait for images that may have lazy-loaded
+    await waitForAllImages(page, timeout);
   }
 
   // Scroll back to top
@@ -64,10 +105,11 @@ async function preScrollPage(page: Page, viewportHeight: number): Promise<number
  */
 async function captureChunked(
   page: Page,
-  viewport: { width: number; height: number }
+  viewport: { width: number; height: number },
+  timeout: number = DEFAULT_TIMEOUT
 ): Promise<Screenshot> {
   // Pre-scroll to load lazy content
-  const totalHeight = await preScrollPage(page, viewport.height);
+  const totalHeight = await preScrollPage(page, viewport.height, timeout);
 
   // Capture tiles
   const tiles: { buffer: Buffer; y: number; height: number }[] = [];
@@ -174,6 +216,8 @@ export async function captureFullPage(
   const fullPage = options.fullPage ?? true;
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;
   const waitUntil = options.waitUntil ?? 'networkidle';
+  const delay = options.delay ?? DEFAULT_DELAY_MS;
+  const waitForImages = options.waitForImages ?? true;
 
   const page = await createPage(viewport);
 
@@ -183,6 +227,16 @@ export async function captureFullPage(
       timeout,
       waitUntil,
     });
+
+    // Wait for images to load
+    if (waitForImages) {
+      await waitForAllImages(page, timeout);
+    }
+
+    // Additional delay for animations/loaders to complete
+    if (delay > 0) {
+      await page.waitForTimeout(delay);
+    }
 
     // If not capturing full page, just take viewport screenshot
     if (!fullPage) {
@@ -204,7 +258,7 @@ export async function captureFullPage(
 
     if (layout.broken) {
       // Layout is broken - use chunked capture (the only reliable method)
-      return await captureChunked(page, viewport);
+      return await captureChunked(page, viewport, timeout);
     }
 
     // Layout looks normal - try native fullPage (faster)
@@ -212,7 +266,7 @@ export async function captureFullPage(
       return await captureNativeFullPage(page, viewport);
     } catch {
       // Native failed (memory limits, etc.) - fall back to chunked
-      return await captureChunked(page, viewport);
+      return await captureChunked(page, viewport, timeout);
     }
   } finally {
     await page.close();
@@ -235,6 +289,8 @@ export async function captureSections(
   const viewport = options.viewport ?? DEFAULT_VIEWPORT;
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;
   const waitUntil = options.waitUntil ?? 'networkidle';
+  const delay = options.delay ?? DEFAULT_DELAY_MS;
+  const waitForImagesOpt = options.waitForImages ?? true;
 
   const page = await createPage(viewport);
 
@@ -245,17 +301,27 @@ export async function captureSections(
       waitUntil,
     });
 
+    // Wait for images to load
+    if (waitForImagesOpt) {
+      await waitForAllImages(page, timeout);
+    }
+
+    // Additional delay for animations/loaders to complete
+    if (delay > 0) {
+      await page.waitForTimeout(delay);
+    }
+
     // First capture full page (using chunked for reliability)
     const layout = await isLayoutBroken(page, viewport.width);
     let fullScreenshot: Screenshot;
 
     if (layout.broken) {
-      fullScreenshot = await captureChunked(page, viewport);
+      fullScreenshot = await captureChunked(page, viewport, timeout);
     } else {
       try {
         fullScreenshot = await captureNativeFullPage(page, viewport);
       } catch {
-        fullScreenshot = await captureChunked(page, viewport);
+        fullScreenshot = await captureChunked(page, viewport, timeout);
       }
     }
 

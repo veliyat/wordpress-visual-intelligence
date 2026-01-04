@@ -1,8 +1,10 @@
 /**
  * Manual test script for perception package
  *
- * Run with: npx tsx test-manual.ts <url>
- * Example: npx tsx test-manual.ts https://example.com
+ * Run with: npx tsx test-manual.ts <url> [delay_ms]
+ * Examples:
+ *   npx tsx test-manual.ts https://example.com
+ *   npx tsx test-manual.ts https://example.com 3000
  */
 
 import {
@@ -14,6 +16,7 @@ import {
 import { writeFileSync, mkdirSync } from 'fs';
 
 const url = process.argv[2] || 'https://example.com';
+const delay = parseInt(process.argv[3] || '2000', 10); // Default 2 seconds
 
 // Extract domain for output folder (e.g., "example.com" from "https://example.com/path")
 const domain = new URL(url).hostname.replace(/^www\./, '');
@@ -21,7 +24,8 @@ const outputDir = `output/${domain}`;
 
 async function main() {
   console.log(`\n🔍 Perception Pipeline Test`);
-  console.log(`   URL: ${url}\n`);
+  console.log(`   URL: ${url}`);
+  console.log(`   Delay: ${delay}ms\n`);
 
   try {
     // Create output directory
@@ -32,6 +36,8 @@ async function main() {
     const screenshot = await captureFullPage(url, {
       timeout: 60000,
       waitUntil: 'load',
+      delay,
+      waitForImages: true,
     });
 
     const fullPagePath = `${outputDir}/full-page.png`;
@@ -70,6 +76,8 @@ async function main() {
         const sections = await captureSections(url, {
           timeout: 60000,
           waitUntil: 'load',
+          delay,
+          waitForImages: true,
         });
 
         console.log(`   ✓ Captured ${sections.length} sections:`);
