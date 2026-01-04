@@ -42,4 +42,9 @@ temp/
 
 # Generated WordPress themes (output)
 output/
+output-*/
 generated-themes/
+
+# Perception test screenshots
+packages/perception/output/
+screenshot-*.png

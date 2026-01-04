@@ -29,6 +29,12 @@ export async function getBrowser(): Promise<Browser> {
   if (!browserInstance || !browserInstance.isConnected()) {
     browserInstance = await chromium.launch({
       headless: true,
+      args: [
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-dev-shm-usage',
+        '--no-sandbox',
+      ],
     });
   }
   return browserInstance;
@@ -68,9 +74,11 @@ export async function navigateAndWait(
   options: {
     waitForSelector?: string;
     timeout?: number;
+    waitUntil?: 'load' | 'domcontentloaded' | 'networkidle';
   } = {}
 ): Promise<void> {
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+  const waitUntil = options.waitUntil ?? 'networkidle';
 
   // Validate URL
   try {
@@ -81,7 +89,7 @@ export async function navigateAndWait(
 
   // Navigate to page
   await page.goto(url, {
-    waitUntil: 'networkidle',
+    waitUntil,
     timeout,
   });
 

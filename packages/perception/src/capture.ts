@@ -25,6 +25,7 @@ export async function captureFullPage(
   const viewport = options.viewport ?? DEFAULT_VIEWPORT;
   const fullPage = options.fullPage ?? true;
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+  const waitUntil = options.waitUntil ?? 'networkidle';
 
   const page = await createPage(viewport);
 
@@ -32,12 +33,7 @@ export async function captureFullPage(
     await navigateAndWait(page, url, {
       waitForSelector: options.waitForSelector,
       timeout,
-    });
-
-    // Capture screenshot
-    const buffer = await page.screenshot({
-      fullPage,
-      type: 'png',
+      waitUntil,
     });
 
     // Get actual page dimensions
@@ -46,10 +42,76 @@ export async function captureFullPage(
       height: document.documentElement.scrollHeight,
     }));
 
+    // Detect horizontal overflow (page wider than viewport)
+    const hasHorizontalOverflow = dimensions.width > viewport.width * 1.5;
+
+    let buffer: Buffer;
+    let capturedWidth: number;
+    let capturedHeight: number;
+
+    if (fullPage && hasHorizontalOverflow) {
+      // Page has broken CSS causing horizontal overflow
+      // Inject CSS to hide horizontal overflow and constrain width
+      await page.addStyleTag({
+        content: `
+          html, body {
+            overflow-x: hidden !important;
+            max-width: ${viewport.width}px !important;
+            width: ${viewport.width}px !important;
+          }
+          * {
+            max-width: 100% !important;
+          }
+        `,
+      });
+
+      // Wait for reflow
+      await page.waitForTimeout(100);
+
+      // Re-measure after CSS fix
+      const fixedDimensions = await page.evaluate(() => ({
+        width: document.documentElement.scrollWidth,
+        height: document.documentElement.scrollHeight,
+      }));
+
+      // Try fullPage capture, fallback to viewport if it crashes
+      try {
+        buffer = await page.screenshot({
+          fullPage: true,
+          type: 'png',
+        });
+        capturedWidth = fixedDimensions.width;
+        capturedHeight = fixedDimensions.height;
+      } catch {
+        // Browser crashed trying to capture - fall back to viewport only
+        // Need to reconnect since the page/browser may have crashed
+        throw new Error(
+          `Page too large to capture (${dimensions.width}x${dimensions.height}px). ` +
+          `Try with fullPage: false`
+        );
+      }
+    } else if (fullPage) {
+      // Normal full page capture
+      buffer = await page.screenshot({
+        fullPage: true,
+        type: 'png',
+      });
+      capturedWidth = dimensions.width;
+      capturedHeight = dimensions.height;
+    } else {
+      // Viewport only
+      buffer = await page.screenshot({
+        fullPage: false,
+        type: 'png',
+      });
+      capturedWidth = viewport.width;
+      capturedHeight = viewport.height;
+    }
+
     return {
       buffer: Buffer.from(buffer),
-      width: fullPage ? dimensions.width : viewport.width,
-      height: fullPage ? dimensions.height : viewport.height,
+      width: capturedWidth,
+      height: capturedHeight,
       format: 'png',
     };
   } finally {
@@ -72,6 +134,7 @@ export async function captureSections(
 ): Promise<SectionScreenshot[]> {
   const viewport = options.viewport ?? DEFAULT_VIEWPORT;
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+  const waitUntil = options.waitUntil ?? 'networkidle';
 
   const page = await createPage(viewport);
 
@@ -79,6 +142,7 @@ export async function captureSections(
     await navigateAndWait(page, url, {
       waitForSelector: options.waitForSelector,
       timeout,
+      waitUntil,
     });
 
     // First capture full page to detect boundaries
@@ -148,6 +212,7 @@ export async function captureRegion(
 ): Promise<Screenshot> {
   const viewport = options.viewport ?? DEFAULT_VIEWPORT;
   const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+  const waitUntil = options.waitUntil ?? 'networkidle';
 
   const page = await createPage(viewport);
 
@@ -155,6 +220,7 @@ export async function captureRegion(
     await navigateAndWait(page, url, {
       waitForSelector: options.waitForSelector,
       timeout,
+      waitUntil,
     });
 
     const buffer = await page.screenshot({

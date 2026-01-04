@@ -71,6 +71,8 @@ export interface CaptureOptions {
   waitForSelector?: string;
   /** Timeout in milliseconds (default: 30000) */
   timeout?: number;
+  /** When to consider navigation complete (default: 'networkidle') */
+  waitUntil?: 'load' | 'domcontentloaded' | 'networkidle';
 }
 
 /**
